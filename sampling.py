@@ -1,3 +1,5 @@
+import functools
+
 import jax
 from jax import numpy as jnp
 from jaxtyping import Array
@@ -78,10 +80,61 @@ def _sample_edpp(eigen_vecs: Array,
     return sample
 
 
+@jax.jit
 def dpp(l: Array,
         key: jax.random.PRNGKeyArray
         ) -> Array:
+    """ Determinantal Point Process with for a symmetric matrix. This function returns a bool vector corresponding to
+    the output set.
+    """
+
     key, key0 = jax.random.split(key)
     val, vec = jnp.linalg.eigh(l)
     edpp_indices = jax.random.bernoulli(key0, val / val + 1)
     return _sample_edpp(vec, edpp_indices, key)
+
+
+def _elementary_symmetric_polynomials(eigen_vals: Array,
+                                      k: int
+                                      ) -> Array:
+    n = eigen_vals.shape[0]
+    e = jnp.zeros((n + 1, k + 1))
+    e = e.at[:, 0].set(1.0)
+    for l in range(1, k + 1):
+        for n in range(1, n + 1):
+            e = e.at[n, l].set(e[n - 1, l] + eigen_vals[n - 1] * e[n - 1, l - 1])
+    return e
+
+
+def _kdpp_indices(eigen_vals: Array,
+                  k: int,
+                  key: jax.random.PRNGKeyArray
+                  ) -> Array:
+    n = eigen_vals.shape[0]
+    e = _elementary_symmetric_polynomials(eigen_vals, k)
+
+    def _body(val):
+        l, n, sample, key = val
+        key, key0 = jax.random.split(key)
+        i = jax.random.bernoulli(key0, eigen_vals[n] * e[n - 1, l - 1] / e[n, l]).astype(int)
+        l = l - i
+        sample = sample.at[n - 1].set(i)
+        return l, n - 1, sample, key
+
+    sample = jnp.zeros(n, dtype=int)
+    _, _, sample, _ = jax.lax.while_loop(lambda val: val[0] > 0, _body, (k, n - 1, sample, key))
+    return sample
+
+
+@functools.partial(jax.jit, static_argnums=1)
+def kdpp(l: Array,
+         k: int,
+         key: jax.random.PRNGKeyArray
+         ) -> Array:
+    """ k-DPP with for a symmetric matrix. This function returns a bool vector corresponding to the output set.
+    """
+
+    key, key0 = jax.random.split(key)
+    val, vec = jnp.linalg.eigh(l)
+    indices = _kdpp_indices(val, k, key0)
+    return _sample_edpp(vec, indices, key)
