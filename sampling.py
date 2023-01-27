@@ -69,8 +69,7 @@ def _sample_edpp(eigen_vecs: Array,
         coord_logits = jnp.where(is_active, jnp.log(jnp.sum(vecs ** 2, -1)), 0)
         idx = jax.random.categorical(key0, coord_logits)
         new_vecs = _orthogonal(vecs, jnp.where(is_active, idx, 0))
-        cond = (jnp.arange(n) < (size - i - 1)) & ~samples
-        new_vecs = jnp.where(cond, new_vecs, 0)
+        new_vecs = jnp.where((jnp.arange(n) < (size - i - 1)) & ~samples, new_vecs, 0)  # active and not sampled so far
         vecs = jnp.where(is_active, new_vecs, vecs)
         sample = samples | ((jnp.arange(d) == idx) & is_active)
         return i + 1, vecs, sample, key
