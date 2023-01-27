@@ -100,9 +100,11 @@ def _elementary_symmetric_polynomials(eigen_vals: Array,
     n = eigen_vals.shape[0]
     e = jnp.zeros((n + 1, k + 1))
     e = e.at[:, 0].set(1.0)
-    for l in range(1, k + 1):
-        for n in range(1, n + 1):
-            e = e.at[n, l].set(e[n - 1, l] + eigen_vals[n - 1] * e[n - 1, l - 1])
+
+    def f(carry: Array, x: Array):
+        return carry.at[x, 1:].set(carry[x - 1, 1:] + eigen_vals[x - 1] * carry[x - 1, :-1]), None
+
+    e, _ = jax.lax.scan(f, e, jnp.arange(1, n + 1))
     return e
 
 
