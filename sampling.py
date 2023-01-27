@@ -90,7 +90,7 @@ def dpp(l: Array,
 
     key, key0 = jax.random.split(key)
     val, vec = jnp.linalg.eigh(l)
-    edpp_indices = jax.random.bernoulli(key0, val / val + 1)
+    edpp_indices = jax.random.bernoulli(key0, val / (val + 1))
     return _sample_edpp(vec, edpp_indices, key)
 
 
